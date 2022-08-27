@@ -1,6 +1,17 @@
 package toolkit
 
-import "crypto/rand"
+import (
+	"crypto/rand"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+//-----------BEGINING OF RANDOM STRING GENERATION SECTION-----------------
 
 //this constant contains all possible characters, that we can use for randomly generated string
 //we can use it for example, for creating file names for Linux system.
@@ -8,12 +19,15 @@ const randomStringSource = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 
 // Tools is the type used to instantiate this module.
 // Any variables of this type will have access to all methods with reciever *Tools
-//T his technic used to share methods from hte modules with other programs
-type Tools struct{}
+// This technic used to share methods from hte modules with other programs
+type Tools struct {
+	MaxFileSize      int
+	AllowedFileTypes []string
+}
 
-//RandomStringGenerator generates random string of certain length
-//it accepts one parameter - lenght of string we want to generate and
-//returns the random string
+// RandomStringGenerator generates random string of certain length
+// it accepts one parameter - lenght of string we want to generate and
+// returns the random string
 func (t *Tools) RandomStringGenerator(n int) string {
 
 	s := make([]rune, n)
@@ -38,3 +52,178 @@ func (t *Tools) RandomStringGenerator(n int) string {
 	return string(s)
 
 }
+
+//-----------END OF RANDOM STRING GENERATION SECTION-----------------
+
+//-----------BEGINING OF FILE UPLOAD SECTION-------------------------
+
+// UploadedFile used to provide information about file that was uploaded from
+// local browser to server
+type UploadedFile struct {
+	NewFileName      string
+	OriginalFileName string
+	FileSize         int64
+}
+
+// UploadFiles takes following paramenters:
+//   -details of HTTP request (where file is posted from local comp to server)
+//   -directory we want to upload our files to
+//   -do we want to rename file or keep the original name. It can have one or more bools for multiple files
+// Function returns info about files we uploaded as slice of type UploadedFiles
+func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) ([]*UploadedFile, error) {
+
+	// by default rename will be true and we will rename each file to random string
+	renameFile := true
+
+	// if we have some boolean value from function we will use these values instead of default
+	if len(remame) > 0 {
+		renameFile = remame[0]
+	}
+
+	// this is my variable for uploaded files details. We will return it as first returned parameter
+	var uploadedFiles []*UploadedFile
+
+	//check if my max file is set, if not make it a Gigabite
+	if t.MaxFileSize == 0 {
+		t.MaxFileSize = 1024 * 1024 * 1024
+	}
+
+	// when we send Post request with files we want to check if there any error occured
+	// take the max file size from Tools struct
+	err := r.ParseMultipartForm(int64(t.MaxFileSize))
+	if err != nil {
+
+		return nil, errors.New("the uploaded file is too big")
+
+	}
+
+	//look at the request and see if any files are stored there
+	for _, fileHeaders := range r.MultipartForm.File {
+
+		for _, header := range fileHeaders {
+
+			//this is inline function that return slice of uploaded file info
+			uploadedFiles, err = func(uploadedFiles []*UploadedFile) ([]*UploadedFile, error) {
+
+				//this is a variable for single file, we store the info about single file
+				var uploadedFile UploadedFile
+
+				//this opens file from request
+				insideFile, err := header.Open()
+				if err != nil {
+					return nil, err
+				}
+				defer insideFile.Close()
+
+				// find out what kind of file it is
+				// we want to look at first 512 bites of the file to check what file it is
+				buff512 := make([]byte, 512)
+				//read my buff (which is first 512 charachters)
+				_, err = insideFile.Read(buff512)
+				if err != nil {
+					return nil, err
+				}
+
+				// check if file type is permitted
+
+				//by default my allowed file type is false, se we only permit the files we checked
+				allowed := false
+
+				//this determine file type from my 512 charachters of the file
+				fileType := http.DetectContentType(buff512)
+
+				// these are file types we allow to upload to server
+				//allowedTypes := []string{"image/jpeg", "image/png", "image/gif"}
+
+				// check if my file types exist in "allowedTypes" list
+				// if yes, allowed = true
+				if len(t.AllowedFileTypes) > 0 {
+
+					for _, x := range t.AllowedFileTypes {
+						if strings.EqualFold(fileType, x) {
+							allowed = true
+						}
+					}
+				} else {
+					allowed = true
+				}
+
+				if !allowed {
+					return nil, errors.New("file type is not allowed")
+				}
+
+				// return to begining of the file (above we read first 512 bytes, now we want to start over)
+				_, err = insideFile.Seek(0, 0)
+				if err != nil {
+					return nil, err
+				}
+
+				// at this point we checked if uploaded file has proper size and type is valid
+				// now, if rename = true we generate new name and save file with new name,
+				// otherwise create file with the same name
+				if renameFile {
+					// here we renaming file to random string and keep the same extention
+					// as in original file (by running filepath.Ext(filename))
+					uploadedFile.NewFileName = fmt.Sprintf("%s%s", t.RandomStringGenerator(12), filepath.Ext(header.Filename))
+
+				} else {
+					uploadedFile.NewFileName = header.Filename
+				}
+
+				uploadedFile.OriginalFileName = header.Filename
+
+				//MILESTONE: here we save file to server disk
+
+				// this is variable for our new file
+				var outfile *os.File
+				defer outfile.Close()
+
+				if outfile, err := os.Create(filepath.Join(uploadDir, uploadedFile.NewFileName)); err != nil {
+					return nil, err
+				} else {
+					//thisi line copies file from the one we get from Post requers to server directory
+					fileSize, err := io.Copy(outfile, insideFile)
+					if err != nil {
+						return nil, err
+					}
+					uploadedFile.FileSize = fileSize
+				}
+
+				// final step - we know file names and sizes, lets build out variable for uploaded files details
+				uploadedFiles = append(uploadedFiles, &uploadedFile)
+
+				return uploadedFiles, nil
+
+			}(uploadedFiles)
+			if err != nil {
+				return uploadedFiles, err
+			}
+
+		}
+
+	}
+	return uploadedFiles, nil
+}
+
+// UploadOneFile upload single file and return info about that file
+// it utilizes function we created above for uploading file
+func (t *Tools) UploadOneFile(r *http.Request, uploadDir string, remame ...bool) (*UploadedFile, error) {
+
+	// by default rename will be true and we will rename each file to random string
+	renameFile := true
+
+	// if we have some boolean value from function we will use these values instead of default
+	if len(remame) > 0 {
+		renameFile = remame[0]
+	}
+
+	files, err := t.UploadFiles(r, uploadDir, renameFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return files[0], nil
+
+}
+
+//-----------END OF FILE UPLOAD SECTION------------------------------
