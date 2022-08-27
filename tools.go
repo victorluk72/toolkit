@@ -88,9 +88,18 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 		t.MaxFileSize = 1024 * 1024 * 1024
 	}
 
+	// Create directory if it dosn't exists
+	// use function we created in this package
+	err := t.CreateDirIfNotExist(uploadDir)
+	if err != nil {
+
+		return nil, errors.New("error creating directory")
+
+	}
+
 	// when we send Post request with files we want to check if there any error occured
 	// take the max file size from Tools struct
-	err := r.ParseMultipartForm(int64(t.MaxFileSize))
+	err = r.ParseMultipartForm(int64(t.MaxFileSize))
 	if err != nil {
 
 		return nil, errors.New("the uploaded file is too big")
@@ -223,6 +232,25 @@ func (t *Tools) UploadOneFile(r *http.Request, uploadDir string, remame ...bool)
 	}
 
 	return files[0], nil
+
+}
+
+// CreateDirIfNotExist check if directory exist, if not it creates it
+func (t *Tools) CreateDirIfNotExist(dirPath string) error {
+
+	// this constant represent permission mode
+	const permMode = 0755
+
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		err := os.MkdirAll(dirPath, permMode)
+		fmt.Printf("Directory %s has been created", dirPath)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 
 }
 
