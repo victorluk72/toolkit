@@ -13,19 +13,20 @@ import (
 
 //-----------BEGINING OF RANDOM STRING GENERATION SECTION-----------------
 
-//this constant contains all possible characters, that we can use for randomly generated string
-//we can use it for example, for creating file names for Linux system.
+// This constant contains all possible characters, that we can use for randomly generated string
+// we can use it for example, for creating file names for Linux system.
 const randomStringSource = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+"
 
-// Tools is the type used to instantiate this module.
+// Tools is the custom type used to instantiate this module.
 // Any variables of this type will have access to all methods with reciever *Tools
-// This technic used to share methods from hte modules with other programs
+// This technic used to share methods from the modules with other programs
 type Tools struct {
 	MaxFileSize      int
 	AllowedFileTypes []string
 }
 
 // RandomStringGenerator generates random string of certain length
+// it uses constant randomStringSource as a source for characters
 // it accepts one parameter - lenght of string we want to generate and
 // returns the random string
 func (t *Tools) RandomStringGenerator(n int) string {
