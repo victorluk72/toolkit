@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -22,7 +23,7 @@ const randomStringSource = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 // This technic used to share methods from the modules with other programs
 type Tools struct {
 	MaxFileSize      int
-	AllowedFileTypes []string
+	AllowedFileTypes []string //You can provide what type of file you allow (imgs/pdf/docs etc)
 }
 
 // RandomStringGenerator generates random string of certain length
@@ -56,32 +57,34 @@ func (t *Tools) RandomStringGenerator(n int) string {
 
 //-----------END OF RANDOM STRING GENERATION SECTION-----------------
 
-//-----------BEGINING OF FILE UPLOAD SECTION-------------------------
+//-----------BEGINING OF IMAGE UPLOAD SECTION-------------------------
+// This function used to upload files from browser to server
 
 // UploadedFile used to provide information about file that was uploaded from
 // local browser to server
 type UploadedFile struct {
-	NewFileName      string
-	OriginalFileName string
+	NewFileName      string //Shows new generated file name (if we do rename it)
+	OriginalFileName string //Shows original file name
 	FileSize         int64
 }
 
 // UploadFiles takes following paramenters:
 //   -details of HTTP request (where file is posted from local comp to server)
+//   -user will do POST HTTP request in order to upload file to server
 //   -directory we want to upload our files to
-//   -do we want to rename file or keep the original name. It can have one or more bools for multiple files
+//   -do we want to rename file or keep the original name. It can have one or more bools (or empty)for multiple files
 // Function returns info about files we uploaded as slice of type UploadedFiles
 func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) ([]*UploadedFile, error) {
 
 	// by default rename will be true and we will rename each file to random string
 	renameFile := true
 
-	// if we have some boolean value from function we will use these values instead of default
+	// if we have any boolean value (true or false) from function we will use these values instead of default
 	if len(remame) > 0 {
 		renameFile = remame[0]
 	}
 
-	// this is my variable for uploaded files details. We will return it as first returned parameter
+	// this is my variable for uploaded files details. We will return it as a first returned parameter
 	var uploadedFiles []*UploadedFile
 
 	//check if my max file is set, if not make it a Gigabite
@@ -108,6 +111,7 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 	}
 
 	//look at the request and see if any files are stored there
+	// the first part of look give me the file headers from my form (from HTTP POST)
 	for _, fileHeaders := range r.MultipartForm.File {
 
 		for _, header := range fileHeaders {
@@ -131,7 +135,7 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 				//read my buff (which is first 512 charachters)
 				_, err = insideFile.Read(buff512)
 				if err != nil {
-					return nil, err
+					return nil, errors.New("error reading file type")
 				}
 
 				// check if file type is permitted
@@ -143,6 +147,7 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 				fileType := http.DetectContentType(buff512)
 
 				// these are file types we allow to upload to server
+				// Now you can specify file type in your Tools variable
 				//allowedTypes := []string{"image/jpeg", "image/png", "image/gif"}
 
 				// check if my file types exist in "allowedTypes" list
@@ -152,10 +157,12 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 					for _, x := range t.AllowedFileTypes {
 						if strings.EqualFold(fileType, x) {
 							allowed = true
+							fmt.Println("My file type is:", fileType)
 						}
 					}
 				} else {
 					allowed = true
+
 				}
 
 				if !allowed {
@@ -163,7 +170,7 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 				}
 
 				// return to begining of the file (above we read first 512 bytes, now we want to start over)
-				_, err = insideFile.Seek(0, 0)
+				_, err = insideFile.Seek(0, 0) //this gets you to the beginign of the first byte of the file
 				if err != nil {
 					return nil, err
 				}
@@ -177,6 +184,8 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 					uploadedFile.NewFileName = fmt.Sprintf("%s%s", t.RandomStringGenerator(12), filepath.Ext(header.Filename))
 
 				} else {
+					//this is for the case when user chose not to rename file,
+					//so the new file name = old file name
 					uploadedFile.NewFileName = header.Filename
 				}
 
@@ -191,10 +200,10 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 				if outfile, err := os.Create(filepath.Join(uploadDir, uploadedFile.NewFileName)); err != nil {
 					return nil, err
 				} else {
-					//thisi line copies file from the one we get from Post requers to server directory
+					//this line copies file from the one we get from Post requers to server directory
 					fileSize, err := io.Copy(outfile, insideFile)
 					if err != nil {
-						return nil, err
+						return nil, errors.New("error while coping files")
 					}
 					uploadedFile.FileSize = fileSize
 				}
@@ -212,6 +221,8 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 		}
 
 	}
+
+	// final step, if nothing went wring we will return info about uploaded file and no error
 	return uploadedFiles, nil
 }
 
@@ -254,5 +265,40 @@ func (t *Tools) CreateDirIfNotExist(dirPath string) error {
 	return nil
 
 }
+
+//-----------END OF FILE UPLOAD SECTION------------------------------
+
+//-----------BEGINING OF SLUG CREATION SECTION-------------------------
+// This function turn string to slug (browser URL safe text)
+// Ex: "Hello, world!"" to "hellow-world"
+
+// Slugify is a simple function turning string to slug
+func (t *Tools) Slugify(s string) (string, error) {
+
+	// check if empty string was send as function parameter
+	if s == "" {
+		return "", errors.New("empty string is not permitted")
+	}
+
+	// this will allow to accept only small letters from a-z and any digits, that all
+
+	var re = regexp.MustCompile(`[^a-z\d]+`)
+
+	//Trim removes extra spaces, then ToLower change everything to lower case
+	slug := strings.Trim(re.ReplaceAllString(strings.ToLower(s), "-"), "-")
+
+	// check if at least one charachtes was valid
+	if len(slug) == 0 {
+		return "", errors.New("after removing all characters, slug is zero length")
+	}
+
+	return slug, nil
+}
+
+//-----------END OF SLUG CREATION SECTION------------------------------
+
+//*******************************************************************
+//-----------BEGINING OF IMAGE PLOAD SECTION-------------------------
+// This function used to upload files from browser to server
 
 //-----------END OF FILE UPLOAD SECTION------------------------------
