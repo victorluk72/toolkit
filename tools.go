@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -296,6 +297,25 @@ func (t *Tools) Slugify(s string) (string, error) {
 }
 
 //-----------END OF SLUG CREATION SECTION------------------------------
+
+//-----------BEGINING OF DOWNLOAD FILE SECTION-------------------------
+// This function used to download static files from server to your local folder
+
+// DownloadStaticFile downloads file from server to local drive
+// As a parameters it takes http r, w, path, file and name you want to rename file to
+func (t *Tools) DownloadStaticFile(w http.ResponseWriter, r *http.Request, p, file, displayName string) {
+
+	filePath := path.Join(p, file)
+
+	// this sets header and forces file to be downloaded instead of displayed
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", displayName))
+
+	//download the file
+	http.ServeFile(w, r, filePath)
+
+}
+
+//-----------END OF DOWNLOAD FILE SECTION------------------------------
 
 //*******************************************************************
 //-----------BEGINING OF IMAGE PLOAD SECTION-------------------------
