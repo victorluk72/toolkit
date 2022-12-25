@@ -79,14 +79,14 @@ type UploadedFile struct {
 //   -directory we want to upload our files to
 //   -do we want to rename file or keep the original name. It can have one or more bools (or empty)for multiple files
 // Function returns info about files we uploaded as slice of type UploadedFiles
-func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) ([]*UploadedFile, error) {
+func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) ([]*UploadedFile, error) {
 
 	// by default rename will be true and we will rename each file to random string
 	renameFile := true
 
 	// if we have any boolean value (true or false) from function we will use these values instead of default
-	if len(remame) > 0 {
-		renameFile = remame[0]
+	if len(rename) > 0 {
+		renameFile = rename[0]
 	}
 
 	// this is my variable for uploaded files details. We will return it as a first returned parameter
@@ -233,14 +233,14 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, remame ...bool) (
 
 // UploadOneFile upload single file and return info about that file
 // it utilizes function we created above for uploading file
-func (t *Tools) UploadOneFile(r *http.Request, uploadDir string, remame ...bool) (*UploadedFile, error) {
+func (t *Tools) UploadOneFile(r *http.Request, uploadDir string, rename ...bool) (*UploadedFile, error) {
 
 	// by default rename will be true and we will rename each file to random string
 	renameFile := true
 
 	// if we have some boolean value from function we will use these values instead of default
-	if len(remame) > 0 {
-		renameFile = remame[0]
+	if len(rename) > 0 {
+		renameFile = rename[0]
 	}
 
 	files, err := t.UploadFiles(r, uploadDir, renameFile)
@@ -422,7 +422,7 @@ func (t *Tools) ReadJSON(w http.ResponseWriter, r *http.Request, data interface{
 // header is variadic parameter for http headers. We might send headers or might not
 func (t *Tools) WriteJSON(w http.ResponseWriter, status int, data interface{}, headers ...http.Header) error {
 
-	// we take our data (some struct and turm it (marshal) to JSON)
+	// we take our data (some struct and turn it (marshal) to JSON)
 	out, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -478,8 +478,7 @@ func (t *Tools) ErrorJSON(w http.ResponseWriter, err error, status ...int) error
 
 //-----------END OF JSON ERROR SECTION------------------------------
 
-// -----------BEGINING OF JSON ERROR SECTION-------------------------
-// This function write the error to JSON resonse
+// -----------BEGINING OF PUSH JSON TO REMOTE SECTION-------------------------
 
 // PushJSONToRemote takes URL, some Data and optional client and pushes data to remote sever
 // If no client is specified we use standard http.Client
