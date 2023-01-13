@@ -16,7 +16,7 @@ func TestToolsRandomStringGenerator(t *testing.T) {
 
 	var testTools Tools
 
-	s := testTools.RandomStringGenerator(10)
+	s := testTools.RandomStringGenerator(10, "dfds454fds")
 
 	//Let's test if the length of my string is 10 charachters
 	if len(s) != 10 {

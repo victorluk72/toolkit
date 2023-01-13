@@ -19,7 +19,7 @@ import (
 
 // This constant contains all possible characters, that we can use for randomly generated string
 // we can use it for example, for creating file names for Linux system.
-const randomStringSource = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+"
+//const randomStringSource = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+"
 
 // Tools is the custom type used to instantiate this module.
 // Any variables of this type will have access to all methods with reciever *Tools [func(t *Tools){}]
@@ -33,12 +33,21 @@ type Tools struct {
 
 // RandomStringGenerator generates random string of certain length
 // it uses constant randomStringSource as a source for characters
-// it accepts one parameter - lenght of string we want to generate and
-// returns the random string
-func (t *Tools) RandomStringGenerator(n int) string {
+// or you can pass list of charactes as function parameter (variadic)
+// it accepts 2 parameters - lenght of string we want to generate and
+// possible list of characters. It returns the random string
+func (t *Tools) RandomStringGenerator(n int, randomStringSource ...string) string {
+
+	//default set of characters
+	rss := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+"
+
+	// if we have some andomStringSource value from function we will use these values instead of default
+	if len(randomStringSource) > 0 {
+		rss = randomStringSource[0]
+	}
 
 	s := make([]rune, n)
-	r := []rune(randomStringSource)
+	r := []rune(rss)
 
 	//Some function details are here
 	//rand.Reader is a global, shared instance of a cryptographically secure random number generator
